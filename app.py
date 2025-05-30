@@ -27,11 +27,10 @@ with app.app_context():
     try:
         cur = mysql.connection.cursor()
         cur.execute("SELECT 1")
-        print("✅ Successfully connected to the MySQL database!")
+        print(f"✅ Connected to database: {app.config['MYSQL_DB']} on {app.config['MYSQL_HOST']}:{app.config['MYSQL_PORT']}")
         cur.close()
     except Exception as e:
-        print("❌ Failed to connect to the MySQL database:", e)
-
+        print(f"❌ Failed to connect to the MySQL database: {e}")
 # Global variables for model and data
 tokenizer = None
 model = None
@@ -46,8 +45,8 @@ def initialize_models_and_data():
     print("Loading models and data in background...")
     try:
         # Load tokenizer and model from Hugging Face repository
-        tokenizer = AutoTokenizer.from_pretrained("haseeby/Chatbot")
-        model = AutoModelForQuestionAnswering.from_pretrained("haseeby/Chatbot")
+        tokenizer = AutoTokenizer.from_pretrained("Haseebay/educare-chatbot")
+        model = AutoModelForQuestionAnswering.from_pretrained("Haseebay/educare-chatbot")
         embedding_model = SentenceTransformer("paraphrase-MiniLM-L6-v2")
 
         # Load Q&A dataset locally from Replit
@@ -393,4 +392,4 @@ def submit_feedback():
         return jsonify({'status': 'error', 'message': 'Database error'}), 500
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8080, debug=True)
+    app.run(host="0.0.0.0", port=8000, debug=True)
