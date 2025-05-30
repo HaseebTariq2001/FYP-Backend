@@ -15,7 +15,6 @@ from flask_mysqldb import MySQL
 from config import Config
 from werkzeug.utils import secure_filename
 from werkzeug.security import check_password_hash
-import base64
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -31,6 +30,7 @@ with app.app_context():
         cur.close()
     except Exception as e:
         print(f"❌ Failed to connect to the MySQL database: {e}")
+
 # Global variables for model and data
 tokenizer = None
 model = None
@@ -40,33 +40,33 @@ questions = None
 answers = None
 models_loaded = threading.Event()
 
-def initialize_models_and_data():
+def load_models_if_needed():
     global tokenizer, model, embedding_model, question_embeddings, questions, answers
-    print("Loading models and data in background...")
-    try:
-        print("Attempting to load tokenizer and model from Hugging Face...")
-        tokenizer = AutoTokenizer.from_pretrained("Haseebay/educare-chatbot")
-        print("Tokenizer loaded successfully.")
-        model = AutoModelForQuestionAnswering.from_pretrained("Haseebay/educare-chatbot")
-        print("Model loaded successfully.")
-        print("Loading sentence transformer...")
-        embedding_model = SentenceTransformer("paraphrase-MiniLM-L6-v2")
-        print("Sentence transformer loaded successfully.")
-        print("Loading Q&A dataset...")
-        df = pd.read_excel(os.path.join(app.root_path, "autism_faqs.xlsx"))
-        questions = df["Question"].fillna("").tolist()
-        answers = df["Answer"].fillna("").tolist()
-        question_embeddings = embedding_model.encode(questions, convert_to_tensor=True)
-        print("Q&A dataset loaded successfully.")
-        print("Models and data loaded successfully!")
-    except Exception as e:
-        print(f"Error loading models and data: {str(e)}")
-        traceback.print_exc()
-    finally:
-        models_loaded.set()
-# Start model loading in a background thread
-with app.app_context():
-    threading.Thread(target=initialize_models_and_data, daemon=True).start()
+    if not models_loaded.is_set():
+        print("Loading models on first request...")
+        try:
+            print("Attempting to load tokenizer and model from Hugging Face...")
+            
+            tokenizer = AutoTokenizer.from_pretrained("Haseebay/educare-chatbot")
+            print("Tokenizer loaded successfully.")
+            model = AutoModelForQuestionAnswering.from_pretrained("Haseebay/educare-chatbot")
+            print("Model loaded successfully.")
+            print("Loading sentence transformer...")
+            embedding_model = SentenceTransformer("paraphrase-MiniLM-L6-v2")
+            print("Sentence transformer loaded successfully.")
+            print("Loading Q&A dataset...")
+            df = pd.read_excel(os.path.join(app.root_path, "autism_faqs.xlsx"))
+            questions = df["Question"].fillna("").tolist()
+            answers = df["Answer"].fillna("").tolist()
+            question_embeddings = embedding_model.encode(questions, convert_to_tensor=True)
+            print("Q&A dataset loaded successfully.")
+            print("Models and data loaded successfully!")
+        except Exception as e:
+            print(f"Error loading models on first request: {str(e)}")
+            traceback.print_exc()
+            raise
+        finally:
+            models_loaded.set()
 
 # Define CARS categories
 CARS_CATEGORIES = [
@@ -76,13 +76,13 @@ CARS_CATEGORIES = [
     "Non-verbal communication", "Activity level", "Intellectual response", "General impressions"
 ]
 
-
-@app.route('/health')
+@app.route("/health")
 def health():
     return jsonify({"status": "healthy", "models_loaded": models_loaded.is_set()}), 200
 
 @app.route("/chat", methods=["POST"])
 def chat():
+    load_models_if_needed()
     # Wait for models to be loaded if not already
     if not models_loaded.is_set():
         print("Waiting for models to load...")
@@ -124,42 +124,60 @@ def is_valid_password(password):
 @app.route('/api/add_child', methods=['POST'])
 def add_child():
     try:
+        print("Received request to /api/add_child")
         data = request.get_json()
+        print(f"Request data: {data}")
+        
         name = data.get('name')
         password = data.get('password')
         age = data.get('age')
         image_base64 = data.get('image_base64')
+        print(f"Parsed data - name: {name}, password: {password}, age: {age}, image_base64 length: {len(image_base64) if image_base64 else 0}")
 
         if not name or not password or age is None:
+            print("Validation failed: Missing required fields")
             return jsonify({'success': False, 'message': 'Name, password, and age are required.'}), 400
 
         if not is_valid_name(name):
+            print(f"Validation failed: Invalid name - {name}")
             return jsonify({'success': False, 'message': 'Name must only contain alphabets and spaces.'}), 400
 
         if not isinstance(age, int) or age < 0 or age > 19:
+            print(f"Validation failed: Invalid age - {age}")
             return jsonify({'success': False, 'message': 'Age must be between 0 and 19.'}), 400
 
         if not is_valid_password(password):
+            print(f"Validation failed: Invalid password - {password}")
             return jsonify({'success': False, 'message': 'Password must be at least 6 characters and contain a digit.'}), 400
 
         cur = mysql.connection.cursor()
+        print("Checking for existing profile...")
         cur.execute("SELECT * FROM child_profiles WHERE name = %s AND password = %s", (name, password))
-        if cur.fetchone():
+        existing = cur.fetchone()
+        if existing:
+            print(f"Profile already exists: {existing}")
+            cur.close()
             return jsonify({'success': False, 'message': 'Profile with this name and password already exists.'}), 400
 
+        print("Decoding image_base64...")
         image_data = base64.b64decode(image_base64) if image_base64 else None
+        print(f"Image data length: {len(image_data) if image_data else 0}")
+
+        print("Inserting into child_profiles...")
         cur.execute("""
             INSERT INTO child_profiles (name, password, age, image_blob)
             VALUES (%s, %s, %s, %s)
         """, (name, password, age, image_data))
         mysql.connection.commit()
+        print("Insert successful")
         cur.close()
 
         return jsonify({'success': True, 'message': 'Child profile saved successfully.'}), 200
 
     except Exception as e:
+        print(f"Error in /api/add_child: {str(e)}")
         traceback.print_exc()
-        return jsonify({'success': False, 'message': 'Server error: Unable to save profile.'}), 500
+        return jsonify({'success': False, 'message': f'Server error: {str(e)}'}), 500
 
 @app.route('/assess_autism', methods=['POST'])
 def assess_autism():
