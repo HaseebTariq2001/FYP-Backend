@@ -76,6 +76,11 @@ CARS_CATEGORIES = [
     "Non-verbal communication", "Activity level", "Intellectual response", "General impressions"
 ]
 
+
+@app.route('/health')
+def health():
+    return jsonify({"status": "healthy", "models_loaded": models_loaded.is_set()}), 200
+
 @app.route("/chat", methods=["POST"])
 def chat():
     # Wait for models to be loaded if not already
