@@ -44,22 +44,26 @@ def initialize_models_and_data():
     global tokenizer, model, embedding_model, question_embeddings, questions, answers
     print("Loading models and data in background...")
     try:
-        # Load tokenizer and model from Hugging Face repository
+        print("Attempting to load tokenizer and model from Hugging Face...")
         tokenizer = AutoTokenizer.from_pretrained("Haseebay/educare-chatbot")
+        print("Tokenizer loaded successfully.")
         model = AutoModelForQuestionAnswering.from_pretrained("Haseebay/educare-chatbot")
+        print("Model loaded successfully.")
+        print("Loading sentence transformer...")
         embedding_model = SentenceTransformer("paraphrase-MiniLM-L6-v2")
-
-        # Load Q&A dataset locally from Replit
-        df = pd.read_excel("autism_faqs.xlsx")
+        print("Sentence transformer loaded successfully.")
+        print("Loading Q&A dataset...")
+        df = pd.read_excel(os.path.join(app.root_path, "autism_faqs.xlsx"))
         questions = df["Question"].fillna("").tolist()
         answers = df["Answer"].fillna("").tolist()
         question_embeddings = embedding_model.encode(questions, convert_to_tensor=True)
+        print("Q&A dataset loaded successfully.")
         print("Models and data loaded successfully!")
     except Exception as e:
-        print(f"Error loading models and data: {e}")
+        print(f"Error loading models and data: {str(e)}")
+        traceback.print_exc()
     finally:
         models_loaded.set()
-
 # Start model loading in a background thread
 with app.app_context():
     threading.Thread(target=initialize_models_and_data, daemon=True).start()
