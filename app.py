@@ -31,86 +31,86 @@ with app.app_context():
     except Exception as e:
         print(f"❌ Failed to connect to the MySQL database: {e}")
 
-# Global variables for model and data
-tokenizer = None
-model = None
-embedding_model = None
-question_embeddings = None
-questions = None
-answers = None
-models_loaded = threading.Event()
+# # Global variables for model and data
+# tokenizer = None
+# model = None
+# embedding_model = None
+# question_embeddings = None
+# questions = None
+# answers = None
+# models_loaded = threading.Event()
 
-def load_models_if_needed():
-    global tokenizer, model, embedding_model, question_embeddings, questions, answers
-    if not models_loaded.is_set():
-        print("Loading models on first request...")
-        try:
-            print("Attempting to load tokenizer and model from Hugging Face...")
+# def load_models_if_needed():
+#     global tokenizer, model, embedding_model, question_embeddings, questions, answers
+#     if not models_loaded.is_set():
+#         print("Loading models on first request...")
+#         try:
+#             print("Attempting to load tokenizer and model from Hugging Face...")
             
-            tokenizer = AutoTokenizer.from_pretrained("Haseebay/educare-chatbot")
-            print("Tokenizer loaded successfully.")
-            model = AutoModelForQuestionAnswering.from_pretrained("Haseebay/educare-chatbot")
-            print("Model loaded successfully.")
-            print("Loading sentence transformer...")
-            embedding_model = SentenceTransformer("paraphrase-MiniLM-L6-v2")
-            print("Sentence transformer loaded successfully.")
-            print("Loading Q&A dataset...")
-            df = pd.read_excel(os.path.join(app.root_path, "autism_faqs.xlsx"))
-            questions = df["Question"].fillna("").tolist()
-            answers = df["Answer"].fillna("").tolist()
-            question_embeddings = embedding_model.encode(questions, convert_to_tensor=True)
-            print("Q&A dataset loaded successfully.")
-            print("Models and data loaded successfully!")
-        except Exception as e:
-            print(f"Error loading models on first request: {str(e)}")
-            traceback.print_exc()
-            raise
-        finally:
-            models_loaded.set()
+#             tokenizer = AutoTokenizer.from_pretrained("Haseebay/educare-chatbot")
+#             print("Tokenizer loaded successfully.")
+#             model = AutoModelForQuestionAnswering.from_pretrained("Haseebay/educare-chatbot")
+#             print("Model loaded successfully.")
+#             print("Loading sentence transformer...")
+#             embedding_model = SentenceTransformer("paraphrase-MiniLM-L6-v2")
+#             print("Sentence transformer loaded successfully.")
+#             print("Loading Q&A dataset...")
+#             df = pd.read_excel(os.path.join(app.root_path, "autism_faqs.xlsx"))
+#             questions = df["Question"].fillna("").tolist()
+#             answers = df["Answer"].fillna("").tolist()
+#             question_embeddings = embedding_model.encode(questions, convert_to_tensor=True)
+#             print("Q&A dataset loaded successfully.")
+#             print("Models and data loaded successfully!")
+#         except Exception as e:
+#             print(f"Error loading models on first request: {str(e)}")
+#             traceback.print_exc()
+#             raise
+#         finally:
+#             models_loaded.set()
 
-# Define CARS categories
-CARS_CATEGORIES = [
-    "Relationship with others", "Imitation skills", "Emotional responses", "Body usage",
-    "Object usage", "Adaptation to change", "Visual response", "Auditory response",
-    "Taste, smell, and tactile response", "Anxiety and fear", "Verbal communication",
-    "Non-verbal communication", "Activity level", "Intellectual response", "General impressions"
-]
+# # Define CARS categories
+# CARS_CATEGORIES = [
+#     "Relationship with others", "Imitation skills", "Emotional responses", "Body usage",
+#     "Object usage", "Adaptation to change", "Visual response", "Auditory response",
+#     "Taste, smell, and tactile response", "Anxiety and fear", "Verbal communication",
+#     "Non-verbal communication", "Activity level", "Intellectual response", "General impressions"
+# ]
 
-@app.route("/health")
-def health():
-    return jsonify({"status": "healthy", "models_loaded": models_loaded.is_set()}), 200
+# @app.route("/health")
+# def health():
+#     return jsonify({"status": "healthy", "models_loaded": models_loaded.is_set()}), 200
 
-@app.route("/chat", methods=["POST"])
-def chat():
-    load_models_if_needed()
-    # Wait for models to be loaded if not already
-    if not models_loaded.is_set():
-        print("Waiting for models to load...")
-        models_loaded.wait()
+# @app.route("/chat", methods=["POST"])
+# def chat():
+#     load_models_if_needed()
+#     # Wait for models to be loaded if not already
+#     if not models_loaded.is_set():
+#         print("Waiting for models to load...")
+#         models_loaded.wait()
 
-    if tokenizer is None or model is None or embedding_model is None:
-        return jsonify({"error": "Models failed to load. Please try again later."}), 500
+#     if tokenizer is None or model is None or embedding_model is None:
+#         return jsonify({"error": "Models failed to load. Please try again later."}), 500
 
-    data = request.get_json()
-    user_question = data.get("message", "").lower().strip()
+#     data = request.get_json()
+#     user_question = data.get("message", "").lower().strip()
 
-    thank_keywords = ["thank", "thanks", "thank you", "shukriya", "thnx", "appreciate"]
-    if any(keyword in user_question for keyword in thank_keywords):
-        return jsonify({"reply": "You're welcome! Let me know if you have more questions related to Autism.😊"})
+#     thank_keywords = ["thank", "thanks", "thank you", "shukriya", "thnx", "appreciate"]
+#     if any(keyword in user_question for keyword in thank_keywords):
+#         return jsonify({"reply": "You're welcome! Let me know if you have more questions related to Autism.😊"})
 
-    how_are_you_keywords = ["how are you", "how r u", "how's it going", "how are u"]
-    if any(keyword in user_question.lower() for keyword in how_are_you_keywords):
-        return jsonify({"reply": "I'm just an Educare bot, but I'm here to help you! 😊 How can I assist you today?"})
+#     how_are_you_keywords = ["how are you", "how r u", "how's it going", "how are u"]
+#     if any(keyword in user_question.lower() for keyword in how_are_you_keywords):
+#         return jsonify({"reply": "I'm just an Educare bot, but I'm here to help you! 😊 How can I assist you today?"})
 
-    input_embedding = embedding_model.encode(user_question, convert_to_tensor=True)
-    scores = torch.nn.functional.cosine_similarity(input_embedding, question_embeddings)
-    best_score = torch.max(scores).item()
-    best_index = torch.argmax(scores).item()
+#     input_embedding = embedding_model.encode(user_question, convert_to_tensor=True)
+#     scores = torch.nn.functional.cosine_similarity(input_embedding, question_embeddings)
+#     best_score = torch.max(scores).item()
+#     best_index = torch.argmax(scores).item()
 
-    if best_score < 0.5:
-        return jsonify({"reply": "Sorry, I cannot answer that question. You can ask me any question about Autism."})
+#     if best_score < 0.5:
+#         return jsonify({"reply": "Sorry, I cannot answer that question. You can ask me any question about Autism."})
 
-    return jsonify({"reply": answers[best_index]})
+#     return jsonify({"reply": answers[best_index]})
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in {'png', 'jpg', 'jpeg', 'gif'}
