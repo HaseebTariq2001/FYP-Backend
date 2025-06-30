@@ -76,9 +76,9 @@ with app.app_context():
 #     "Non-verbal communication", "Activity level", "Intellectual response", "General impressions"
 # ]
 
-@app.route("/health")
+@app.route("/health",methods=['GET'])
 def health():
-    return jsonify({"status": "healthy", "models_loaded": models_loaded.is_set()}), 200
+    return jsonify({"status": "healthy"}), 200
 
 # @app.route("/chat", methods=["POST"])
 # def chat():
