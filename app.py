@@ -189,7 +189,7 @@ def assess_autism():
 
     total_score = sum(scores)
     severity = "Severe Autism" if total_score >= 36 else "Moderate Autism" if 30 <= total_score < 36 else "No Autism or Mild Developmental Delay"
-    deficient_areas = [CARS_CATEGORIES[i] for i, score in enumerate(scores) if score >= 3]
+    # deficient_areas = [CARS_CATEGORIES[i] for i, score in enumerate(scores) if score >= 3]
 
     return jsonify({
         "total_score": total_score,
